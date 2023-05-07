@@ -1,5 +1,5 @@
 import pandas as pd
-import re, pytz, io, warnings, time, os
+import re, pytz, io, warnings, time, os, json
 from pydrive2.auth import GoogleAuth
 from pydrive2.drive import GoogleDrive
 from datetime import datetime
@@ -15,11 +15,11 @@ warnings.filterwarnings("ignore")
 start = time.time()
 
 
-def get_datetime_now():
+def now():
     return datetime.now(IST).strftime("%b %e, %Y %H:%M")
 
 
-print(f"\nStarted executing at {get_datetime_now()}")
+print(f"\nStarted executing at {now()}")
 
 
 def drive_upload(df, drive, name):
@@ -39,7 +39,7 @@ def drive_upload(df, drive, name):
 
 
 def delete_old_files_from_drive(file_list):
-    [x.Delete() for x in file_list]
+    [x.Delete() for x in tqdm(file_list)]
 
 
 def main():
@@ -84,12 +84,17 @@ def main():
     print("\n---> Getting user's playlists' info")
 
     my_playlists = spotify.get_all_user_playlists(sp)
+    my_playlists = sorted(my_playlists, key=lambda x: x["name"])
 
     all_df = []
 
-    etldatetime = get_datetime_now()
+    etl_datetime = now()
 
     time.sleep(1)
+
+    f = open("popularity.json", "w", encoding="utf-8")
+
+    pop = {}
 
     print("\n---> Preparing, procesing and uploading dataframes")
 
@@ -98,7 +103,6 @@ def main():
             spotify.get_playlist_tracks(sp, playlist["id"]), playlist
         )
         name = re.sub(r"[^a-zA-Z0-9 ]", "", playlist["name"])[0:30]
-        df["etl_datetime"] = etldatetime
         artist_id_list = df["track_main_artist_id"].tolist()
         genre_list = (
             spotify.get_genre_list(sp, artist_id_list=artist_id_list)
@@ -107,6 +111,10 @@ def main():
         )
         df["genre_list"] = list(genre_list)
 
+        df["etl_datetime"] = etl_datetime
+
+        pop[playlist["name"]] = round(df["track_popularity"].mean(), 1)
+        
         drive_upload(df, drive, f"{name}_spotifyid.xlsx")
         all_df.append(df)
         df = None
@@ -115,11 +123,17 @@ def main():
         pd.concat(all_df).drop_duplicates(subset=["track_id"]).reset_index(drop=True)
     )
 
+    pop = dict(sorted(pop.items(), key=lambda x: x[1]))
+
+    json.dump(pop, f, indent=4)
+
+    f.close()
+
     drive_upload(total, drive, f"total_unique_tracks_spotifyid.xlsx")
 
     print("\n---> Deleting previous backup files")
 
-    delete_old_files_from_drive(files) if list(total.shape)[0] > 3400 else None 
+    delete_old_files_from_drive(files) if list(total.shape)[0] > 3000 else None 
 
     end = time.time()
 
