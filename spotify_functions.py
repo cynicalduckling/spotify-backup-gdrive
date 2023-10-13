@@ -49,27 +49,9 @@ def get_playlist_tracks(spotify_client_object, playlist_id):
 
 
 def create_playlist_dataframe(track_list, playlist_info):
-    df_columns = [
-        "playlist_name",
-        "playlist_url",
-        "playlist_id",
-        "track_name",
-        "track_artists_all",
-        "track_main_artist",
-        "track_main_artist_id",
-        "track_main_artist_url",
-        "track_url",
-        "track_id",
-        "track_popularity",
-        "track_length_ms",
-        "album_name",
-        "album_release_date",
-        "album_artist",
-        "album_url",
-        "album_id",
-    ]
+
     count = 0
-    df = pd.DataFrame(columns=df_columns)
+    df = pd.DataFrame()
     try:
         for entry in track_list:
             to_append = {
@@ -96,14 +78,15 @@ def create_playlist_dataframe(track_list, playlist_info):
                 "album_id": entry["track"]["album"]["id"],
             }
 
-            df = df.append(to_append, ignore_index=True)
-            to_append = {}
+            df_append = pd.DataFrame(data=to_append, index=[0])
+            df = pd.concat([df, df_append])
     except Exception as e:
         count = count + 1
 
     if count > 0:
         print("exception at creating dataframe")
         print(f"{count} tracks raised errors")
+
     return df
 
 
